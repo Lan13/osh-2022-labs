@@ -72,6 +72,41 @@ int main() {
       close(pipefds[1]);
       while(wait(nullptr) > 0);
     }
+    else {
+      int last_read_fd;
+      for(int i = 0; i <= pipecmds - 1; i++) {
+        int pipefds[2];
+        if (i != pipecmds - 1) {
+          if (pipe(pipefds) < 0) {
+            std::cout<<"pipe error!\n";
+            continue;
+          }
+        }
+        pid_t pid = fork();
+        if (pid == 0) {
+          if (i != pipecmds - 1) {
+            close(pipefds[0]);
+            dup2(pipefds[1], STDOUT_FILENO);
+            close(pipefds[1]);
+          }
+          if (i != 0) {
+            dup2(last_read_fd, STDIN_FILENO);
+            close(last_read_fd);
+          }
+          std::vector<std::string> argv = split(cmds[i], " ");
+          int argc = argv.size();
+          externalCommand(argc, argv);
+          exit(255);
+        }
+        if (i != 0)
+          close(last_read_fd);
+        if (i != pipecmds - 1) {
+          last_read_fd = pipefds[0];
+          close(pipefds[1]);
+        }
+        while(wait(nullptr) > 0);
+      }
+    }
   }
   return 0;
 }
