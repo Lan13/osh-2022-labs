@@ -6,7 +6,9 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-int execute(int argc, std::vector<std::string> argv);
+int builtinCommand(int argc, std::vector<std::string> argv);
+int externalCommand(int argc, std::vector<std::string> argv);
+std::string trim(std::string s);
 std::vector<std::string> split(std::string s, const std::string &delimiter);
 
 int main() {
@@ -16,22 +18,19 @@ int main() {
   while (true) {
     std::cout << "# ";
     std::getline(std::cin, cmd);
+    cmd = trim(cmd);
     std::vector<std::string> cmds = split(cmd, "|");
-    int pipecmd = cmds.size();
-    if (pipecmd == 0)
+    int pipecmds = cmds.size();
+    if (pipecmds == 0)
       continue;
-    else if (pipecmd == 1) {
+    else if (pipecmds == 1) {
       std::vector<std::string> argv = split(cmds[0], " ");
       int argc = argv.size();
-      if (execute(argc, argv) == 1)
+      if (builtinCommand(argc, argv) == 1)
         continue;
       pid_t pid = fork();
-      char *arg_ptrs[argv.size() + 1];
-      for (auto i = 0; i < argc; i++) 
-        arg_ptrs[i] = &argv[i][0];
-      arg_ptrs[argc] = nullptr;
       if (pid == 0) {
-        execvp(argv[0].c_str(), arg_ptrs);
+        externalCommand(argc, argv);
         exit(255);
       }
       int ret = wait(nullptr);
@@ -39,11 +38,45 @@ int main() {
         std::cout << "wait failed";
       }
     }
+    else if (pipecmds == 2) {
+      int pipefds[2];
+      if (pipe(pipefds) < 0) {
+        std::cout<<"pipe error!\n";
+        continue;
+      }
+      pid_t pid = fork();
+      if (pid < 0) {
+        std::cout<<"fork error!\n";
+        continue;
+      }
+      if (pid == 0) {
+        close(pipefds[0]);
+        dup2(pipefds[1], STDOUT_FILENO);
+        close(pipefds[1]);
+        std::vector<std::string> argv = split(cmds[0], " ");
+        int argc = argv.size();
+        externalCommand(argc, argv);
+        exit(255);
+      }
+      pid = fork();
+      if (pid == 0) {
+        close(pipefds[1]);
+        dup2(pipefds[0], STDIN_FILENO);
+        close(pipefds[0]);
+        std::vector<std::string> argv = split(cmds[1], " ");
+        int argc = argv.size();
+        externalCommand(argc, argv);
+        exit(255);
+      }
+      close(pipefds[0]);
+      close(pipefds[1]);
+      while(wait(nullptr) > 0);
+    }
   }
-
+  return 0;
 }
 
-int execute(int argc, std::vector<std::string> argv)
+int builtinCommand(int argc, std::vector<std::string> argv)
 {
   if (argc == 0)
     return 1;
@@ -104,17 +137,36 @@ int execute(int argc, std::vector<std::string> argv)
   }
   return 0;
 }
+
+int externalCommand(int argc, std::vector<std::string> argv)
+{
+  char *arg_ptrs[argv.size() + 1];
+  for (auto i = 0; i < argc; i++) 
+    arg_ptrs[i] = &argv[i][0];
+  arg_ptrs[argc] = nullptr;
+  execvp(argv[0].c_str(), arg_ptrs);
+  exit(255);
+}
+
 std::vector<std::string> split(std::string s, const std::string &delimiter) {
   std::vector<std::string> res;
   size_t pos = 0;
   std::string token;
+  s = trim(s);
   while ((pos = s.find(delimiter)) != std::string::npos) {
-    token = s.substr(0, pos);
-    res.push_back(token);
+    if (pos != 0) {
+      token = trim(s.substr(0, pos));
+      res.push_back(token);
+    }
     s = s.substr(pos + delimiter.length());
   }
   res.push_back(s);
   return res;
 }
 
-
+std::string trim(std::string s) {
+  const char *t = " ";
+  s = s.erase(0, s.find_first_not_of(t));
+  s.erase(s.find_last_not_of(t) + 1);
+  return s;
+}
