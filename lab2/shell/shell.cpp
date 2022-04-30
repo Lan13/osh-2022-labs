@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <fstream>
 #include <climits>
 #include <unistd.h>
 #include <fcntl.h>
@@ -52,6 +53,7 @@ int main()
         if (ret < 0)
         {
           std::cout << "wait failed";
+          exit(255);
         }
       }
       else if (pipecmds == 2)
@@ -60,13 +62,13 @@ int main()
         if (pipe(pipefds) < 0)
         {
           std::cout << "pipe error!\n";
-          continue;
+          exit(255);
         }
         pid_t pid = fork();
         if (pid < 0)
         {
           std::cout << "fork error!\n";
-          continue;
+          exit(255);
         }
         if (pid == 0)
         {
@@ -104,7 +106,7 @@ int main()
             if (pipe(pipefds) < 0)
             {
               std::cout << "pipe error!\n";
-              continue;
+              exit(255);
             }
           }
           pid_t pid = fork();
@@ -150,52 +152,88 @@ int builtinCommand(int argc, std::vector<std::string> argv)
 {
   if (argc == 0)
     return 1;
-
   if (argv[0] == "cd")
   {
     if (argc <= 1)
     {
       std::cout << "Insufficient arguments\n";
-      return 1;
+      exit(255);
     }
-
     int ret = chdir(argv[1].c_str());
     if (ret < 0)
     {
       std::cout << "cd failed\n";
+      exit(255);
     }
     return 1;
   }
-
   // 设置环境变量
   if (argv[0] == "export")
   {
     for (auto i = ++argv.begin(); i != argv.end(); i++)
     {
       std::string key = *i;
-
       // std::string 默认为空
       std::string value;
-
       size_t pos;
       if ((pos = i->find('=')) != std::string::npos)
       {
         key = i->substr(0, pos);
         value = i->substr(pos + 1);
       }
-
       int ret = setenv(key.c_str(), value.c_str(), 1);
       if (ret < 0)
       {
         std::cout << "export failed\n";
+        exit(255);
       }
     }
     return 1;
   }
-
-  if (argv[0] == "exit")
-  {
+  if (argv[0] == "exit") {
     exit(0);
+  }
+  if (argv[0] == "history") {
+    int total_line = 0, current_line = 0;
+    std::string read_line, out_line;
+    std::ifstream history_file(".bash_history", std::ios::in);
+    if (history_file.is_open()) {
+      while (std::getline(history_file, read_line)) {
+        total_line++;
+      }
+    }
+    else {
+      std::cout << "history open error!\n";
+      exit(255);
+    }
+    history_file.close();
+    int len = total_line;
+    if (argc > 2) {
+      std::cout << "history argv error: too many arguments!\n";
+      exit(255);
+    }
+    else if (argc == 2) {
+      len = std::stoi(argv[1]);
+      if (len <= 0) {
+        std::cout << "history argv error: cannot be a negative!\n";
+        exit(255);
+      }
+    }
+    std::ifstream history_file2(".bash_history", std::ios::in);
+    if (history_file2.is_open()) {
+      while (std::getline(history_file2, read_line)) {
+        if (total_line - current_line <= len) {
+          out_line = "  " + std::to_string(current_line) + "  " + read_line;
+          std::cout << out_line << "\n";
+        }
+        current_line++;
+      }
+    }
+    else {
+      std::cout << "history open error!\n";
+      exit(255);
+    }
+    history_file2.close();
   }
   return 0;
 }
@@ -219,7 +257,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
       if (fd == -1)
       {
         std::cout << "Error: No such file or directory";
-        return -1;
+        exit(255);
       }
       dup2(fd, STDOUT_FILENO);
       close(fd);
@@ -233,7 +271,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
       if (fd == -1)
       {
         std::cout << "Error: No such file or directory";
-        return -1;
+        exit(255);
       }
       dup2(fd, STDIN_FILENO);
       close(fd);
@@ -247,7 +285,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
       if (fd == -1)
       {
         std::cout << "Error: No such file or directory";
-        return -1;
+        exit(255);
       }
       dup2(fd, STDOUT_FILENO);
       close(fd);
