@@ -4,7 +4,10 @@
 #include <sstream>
 #include <climits>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 int builtinCommand(int argc, std::vector<std::string> argv);
 int externalCommand(int argc, std::vector<std::string> argv);
@@ -104,8 +107,8 @@ int main() {
           last_read_fd = pipefds[0];
           close(pipefds[1]);
         }
-        while(wait(nullptr) > 0);
       }
+      while(wait(nullptr) > 0);
     }
   }
   return 0;
@@ -125,22 +128,6 @@ int builtinCommand(int argc, std::vector<std::string> argv)
     int ret = chdir(argv[1].c_str());
     if (ret < 0) {
       std::cout << "cd failed\n";
-    }
-    return 1;
-  }
-  if (argv[0] == "pwd") {
-    std::string cwd;
-
-    // 预先分配好空间
-    cwd.resize(PATH_MAX);
-
-    // std::string to char *: &s[0]（C++17 以上可以用 s.data()）
-    // std::string 保证其内存是连续的
-    const char *ret = getcwd(&cwd[0], PATH_MAX);
-    if (ret == nullptr) {
-      std::cout << "cwd failed\n";
-    } else {
-      std::cout << ret << "\n";
     }
     return 1;
   }
@@ -175,8 +162,53 @@ int builtinCommand(int argc, std::vector<std::string> argv)
 
 int externalCommand(int argc, std::vector<std::string> argv)
 {
-  char *arg_ptrs[argv.size() + 1];
-  for (auto i = 0; i < argc; i++) 
+  int orient = -1;
+  for(int i = 0; i < argc; i++) {
+    if (argv[i] == ">" || argv[i] == ">>" || argv[i] == "<") {
+      orient = i;
+      break;
+    }
+  }
+  if (orient >= 0) {
+    if (argv[orient] == ">") {
+      int fd = open(argv[orient + 1].c_str(), O_RDWR);
+      if (fd == -1) {
+        std::cout << "Error: No such file or directory";
+        return -1;
+      }
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
+      argv.pop_back();
+      argv.pop_back();
+      argc = argc - 2;
+    }
+    else if (argv[orient] == "<") {
+      int fd = open(argv[orient + 1].c_str(), O_RDWR);
+      if (fd == -1) {
+        std::cout << "Error: No such file or directory";
+        return -1;
+      }
+      dup2(fd, STDIN_FILENO);
+      close(fd);
+      argv.pop_back();
+      argv.pop_back();
+      argc = argc - 2;
+    }
+    else if (argv[orient] == ">>") {
+      int fd = open(argv[orient + 1].c_str(), O_RDWR | O_APPEND);
+      if (fd == -1) {
+        std::cout << "Error: No such file or directory";
+        return -1;
+      }
+      dup2(fd, STDOUT_FILENO);
+      close(fd);
+      argv.pop_back();
+      argv.pop_back();
+      argc = argc - 2;
+    }
+  }
+  char *arg_ptrs[argc + 1];
+  for(auto i = 0; i < argc; i++) 
     arg_ptrs[i] = &argv[i][0];
   arg_ptrs[argc] = nullptr;
   execvp(argv[0].c_str(), arg_ptrs);
