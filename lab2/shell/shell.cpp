@@ -15,6 +15,7 @@ int externalCommand(int argc, std::vector<std::string> argv);
 std::string trim(std::string s);
 std::vector<std::string> split(std::string s, const std::string &delimiter);
 void handler(int sig);
+int fileLineCount(std::string filename);
 pid_t pid_ctrlc;
 
 int main()
@@ -35,6 +36,24 @@ int main()
       cmd = trim(cmd);
       std::vector<std::string> cmds = split(cmd, "|");
       int pipecmds = cmds.size();
+      if (pipecmds != 0) {
+        std::ofstream history_file(".bash_history", std::ios::out | std::ios::app);
+        if (history_file.is_open()) {
+          if (pipecmds == 1) {
+            std::vector<std::string> argv = split(cmds[0], " ");
+            if (argv[0] != "exit" && argv[0][0] != '!')
+              history_file << cmd << "\n";
+          }
+          else {
+            history_file << cmd << "\n";
+          }
+        }
+        else {
+          std::cout << "history open error!\n";
+          exit(255);
+        }
+        history_file.close();
+      }
       if (pipecmds == 0)
         continue;
       else if (pipecmds == 1)
@@ -196,17 +215,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
   if (argv[0] == "history") {
     int total_line = 0, current_line = 0;
     std::string read_line, out_line;
-    std::ifstream history_file(".bash_history", std::ios::in);
-    if (history_file.is_open()) {
-      while (std::getline(history_file, read_line)) {
-        total_line++;
-      }
-    }
-    else {
-      std::cout << "history open error!\n";
-      exit(255);
-    }
-    history_file.close();
+    total_line = fileLineCount(".bash_history");
     int len = total_line;
     if (argc > 2) {
       std::cout << "history argv error: too many arguments!\n";
@@ -219,21 +228,22 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(255);
       }
     }
-    std::ifstream history_file2(".bash_history", std::ios::in);
-    if (history_file2.is_open()) {
-      while (std::getline(history_file2, read_line)) {
+    std::ifstream history_file(".bash_history", std::ios::in);
+    if (history_file.is_open()) {
+      while (std::getline(history_file, read_line)) {
         if (total_line - current_line <= len) {
           out_line = "  " + std::to_string(current_line) + "  " + read_line;
           std::cout << out_line << "\n";
         }
         current_line++;
       }
+      exit(1);
     }
     else {
       std::cout << "history open error!\n";
       exit(255);
     }
-    history_file2.close();
+    history_file.close();
   }
   return 0;
 }
@@ -308,6 +318,23 @@ void handler(int sig)
     std::cout << "\n";
     exit(1);
   }
+}
+
+int fileLineCount(std::string filename) {
+  int total_line = 0;
+  std::string read_line;
+    std::ifstream history_file(filename, std::ios::in);
+    if (history_file.is_open()) {
+      while (std::getline(history_file, read_line)) {
+        total_line++;
+      }
+    }
+    else {
+      std::cout << "history open error!\n";
+      exit(255);
+    }
+    history_file.close();
+    return total_line;
 }
 
 std::vector<std::string> split(std::string s, const std::string &delimiter)
