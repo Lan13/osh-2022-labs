@@ -254,16 +254,25 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         while (std::getline(history_file, read_line)) {
           current_line++;
           if (total_line == current_line) {
-            std::cout << read_line << "\n";
             pid_t pid = fork();
             if (pid == 0)
             {
-              std::vector<std::string> argv = split(read_line, " ");
-              int argc = argv.size();
-              externalCommand(argc, argv);
-              exit(255);
+              pid_t pid_outline = fork();
+              if (pid_outline == 0) {
+                std::cout << read_line << "\n";
+              }
+              else if (pid_outline > 0) {
+                std::vector<std::string> argv = split(read_line, " ");
+                int argc = argv.size();
+                externalCommand(argc, argv);
+                exit(255);
+              }
+              else {
+                std::cout << "fork error!\n";
+                exit(255);
+              }
             }
-            break;
+            while (wait(nullptr) > 0);
           }
         }
         exit(1);
