@@ -186,7 +186,6 @@ int builtinCommand(int argc, std::vector<std::string> argv)
     }
     return 1;
   }
-  // 设置环境变量
   if (argv[0] == "export")
   {
     for (auto i = ++argv.begin(); i != argv.end(); i++)
@@ -244,6 +243,40 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       exit(255);
     }
     history_file.close();
+  }
+  if (argv[0][0] == '!') {
+    if (argv[0] == "!!") {
+      int total_line = fileLineCount(".bash_history");
+      int current_line = 0;
+      std::string read_line;
+      std::ifstream history_file(".bash_history", std::ios::in);
+      if (history_file.is_open()) {
+        while (std::getline(history_file, read_line)) {
+          current_line++;
+          if (total_line == current_line) {
+            std::cout << read_line << "\n";
+            pid_t pid = fork();
+            if (pid == 0)
+            {
+              std::vector<std::string> argv = split(read_line, " ");
+              int argc = argv.size();
+              externalCommand(argc, argv);
+              exit(255);
+            }
+            break;
+          }
+        }
+        exit(1);
+      }
+      else {
+        std::cout << "history open error!\n";
+        exit(255);
+      }
+      history_file.close();
+    }
+    else {
+
+    }
   }
   return 0;
 }
