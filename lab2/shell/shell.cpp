@@ -230,11 +230,11 @@ int builtinCommand(int argc, std::vector<std::string> argv)
     std::ifstream history_file(".bash_history", std::ios::in);
     if (history_file.is_open()) {
       while (std::getline(history_file, read_line)) {
+        current_line++;
         if (total_line - current_line <= len) {
           out_line = "  " + std::to_string(current_line) + "  " + read_line;
           std::cout << out_line << "\n";
         }
-        current_line++;
       }
       exit(1);
     }
@@ -284,8 +284,47 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       history_file.close();
     }
     else {
+      int total_line = fileLineCount(".bash_history");
       argv[0] = argv[0].substr(1);
-      if ()
+      if (std::stoi(argv[0]) > total_line) {
+        std::cout << "event not found!\n";
+        exit(255);
+      }
+      int current_line = 0;
+      std::string read_line;
+      std::ifstream history_file(".bash_history", std::ios::in);
+      if (history_file.is_open()) {
+        while (std::getline(history_file, read_line)) {
+          current_line++;
+          if (std::stoi(argv[0]) == current_line) {
+            pid_t pid = fork();
+            if (pid == 0)
+            {
+              pid_t pid_outline = fork();
+              if (pid_outline == 0) {
+                std::cout << read_line << "\n";
+              }
+              else if (pid_outline > 0) {
+                std::vector<std::string> argv = split(read_line, " ");
+                int argc = argv.size();
+                externalCommand(argc, argv);
+                exit(255);
+              }
+              else {
+                std::cout << "fork error!\n";
+                exit(255);
+              }
+            }
+            while (wait(nullptr) > 0);
+          }
+        }
+        exit(1);
+      }
+      else {
+        std::cout << "history open error!\n";
+        exit(255);
+      }
+      history_file.close();
     }
   }
   return 0;
