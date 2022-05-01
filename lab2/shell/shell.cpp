@@ -32,7 +32,10 @@ int main()
     {
       signal(SIGINT, handler);
       std::cout << "# ";
-      std::getline(std::cin, cmd);
+      if (!std::getline(std::cin, cmd)){
+        std::cout << "\n";
+        exit(0);
+      }
       cmd = trim(cmd);
       std::vector<std::string> cmds = split(cmd, "|");
       int pipecmds = cmds.size();
