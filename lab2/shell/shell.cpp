@@ -261,14 +261,11 @@ int builtinCommand(int argc, std::vector<std::string> argv)
               if (pid_outline == 0) {
                 std::cout << read_line << "\n";
               }
-              else if (pid_outline > 0) {
+              while (wait(nullptr) > 0);
+              if (pid_outline > 0) {
                 std::vector<std::string> argv = split(read_line, " ");
                 int argc = argv.size();
                 externalCommand(argc, argv);
-                exit(255);
-              }
-              else {
-                std::cout << "fork error!\n";
                 exit(255);
               }
             }
@@ -304,14 +301,11 @@ int builtinCommand(int argc, std::vector<std::string> argv)
               if (pid_outline == 0) {
                 std::cout << read_line << "\n";
               }
-              else if (pid_outline > 0) {
+              while (wait(nullptr) > 0);
+              if (pid_outline > 0) {
                 std::vector<std::string> argv = split(read_line, " ");
                 int argc = argv.size();
                 externalCommand(argc, argv);
-                exit(255);
-              }
-              else {
-                std::cout << "fork error!\n";
                 exit(255);
               }
             }
