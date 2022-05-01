@@ -255,7 +255,10 @@ int builtinCommand(int argc, std::vector<std::string> argv)
           exit(1);
         }
       }
-      
+      if (argv[1] == "~root") {
+        std::cout << "/root\n";
+        exit(1);
+      }
     }
   }
   if (argv[0][0] == '!') {
