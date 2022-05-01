@@ -246,6 +246,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       exit(255);
     }
     history_file.close();
+    return 1;
   }
   if (argv[0] == "echo") {
     if (argc > 1) {
@@ -263,6 +264,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(1);
       }
     }
+    return 1;
   }
   if (argv[0][0] == '!') {
     if (argv[0] == "!!") {
@@ -285,6 +287,8 @@ int builtinCommand(int argc, std::vector<std::string> argv)
               if (pid_outline > 0) {
                 std::vector<std::string> argv = split(read_line, " ");
                 int argc = argv.size();
+                if (builtinCommand(argc, argv) == 1)
+                  exit(1);
                 externalCommand(argc, argv);
                 exit(255);
               }
@@ -299,6 +303,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(255);
       }
       history_file.close();
+      return 1;
     }
     else {
       int total_line = fileLineCount(".bash_history");
@@ -325,6 +330,8 @@ int builtinCommand(int argc, std::vector<std::string> argv)
               if (pid_outline > 0) {
                 std::vector<std::string> argv = split(read_line, " ");
                 int argc = argv.size();
+                if (builtinCommand(argc, argv) == 1)
+                  exit(1);
                 externalCommand(argc, argv);
                 exit(255);
               }
@@ -339,6 +346,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(255);
       }
       history_file.close();
+      return 1;
     }
   }
   return 0;
