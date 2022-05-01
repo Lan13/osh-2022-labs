@@ -244,6 +244,20 @@ int builtinCommand(int argc, std::vector<std::string> argv)
     }
     history_file.close();
   }
+  if (argv[0] == "echo") {
+    if (argc > 1) {
+      if (argv[1] == "$SHELL") {
+        char* path = getenv("SHELL");
+        if (path == NULL)
+          exit(255);
+        else {
+          std::cout << path << "\n";
+          exit(1);
+        }
+      }
+      
+    }
+  }
   if (argv[0][0] == '!') {
     if (argv[0] == "!!") {
       int total_line = fileLineCount(".bash_history");
