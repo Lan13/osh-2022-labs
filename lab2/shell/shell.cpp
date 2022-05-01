@@ -284,7 +284,8 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       history_file.close();
     }
     else {
-
+      argv[0] = argv[0].substr(1);
+      if ()
     }
   }
   return 0;
