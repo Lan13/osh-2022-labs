@@ -236,7 +236,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
     if (history_file.is_open()) {
       while (std::getline(history_file, read_line)) {
         current_line++;
-        if (total_line - current_line <= len) {
+        if (total_line - current_line < len) {
           out_line = "  " + std::to_string(current_line) + "  " + read_line;
           std::cout << out_line << "\n";
         }
