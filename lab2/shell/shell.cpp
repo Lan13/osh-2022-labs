@@ -368,12 +368,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
   {
     if (argv[orient] == ">")
     {
-      int fd = open(argv[orient + 1].c_str(), O_RDWR);
-      if (fd == -1)
-      {
-        std::cout << "Error: No such file or directory";
-        exit(255);
-      }
+      int fd = open(argv[orient + 1].c_str(), O_RDWR | O_CREAT, S_IRWXU);
       dup2(fd, STDOUT_FILENO);
       close(fd);
       argv.pop_back();
@@ -382,7 +377,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
     }
     else if (argv[orient] == "<")
     {
-      int fd = open(argv[orient + 1].c_str(), O_RDWR);
+      int fd = open(argv[orient + 1].c_str(), O_RDWR, S_IRWXU);
       if (fd == -1)
       {
         std::cout << "Error: No such file or directory";
@@ -396,12 +391,7 @@ int externalCommand(int argc, std::vector<std::string> argv)
     }
     else if (argv[orient] == ">>")
     {
-      int fd = open(argv[orient + 1].c_str(), O_RDWR | O_APPEND);
-      if (fd == -1)
-      {
-        std::cout << "Error: No such file or directory";
-        exit(255);
-      }
+      int fd = open(argv[orient + 1].c_str(), O_RDWR | O_APPEND | O_CREAT, S_IRWXU);
       dup2(fd, STDOUT_FILENO);
       close(fd);
       argv.pop_back();
