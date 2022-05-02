@@ -17,6 +17,7 @@ std::vector<std::string> split(std::string s, const std::string &delimiter);
 void handler(int sig);
 int fileLineCount(std::string filename);
 pid_t pid_ctrlc;
+std::string bash_history_path;
 
 int main()
 {
@@ -25,6 +26,11 @@ int main()
   // 不同步 iostream 和 cstdio 的 buffer
   std::ios::sync_with_stdio(false);
   std::string cmd;
+  char buff[PATH_MAX];
+  getcwd(buff, PATH_MAX);
+  std::string cwd(buff);
+  std::string temp = "/.bash_history";
+  bash_history_path = cwd + temp;
   while (true)
   {
     pid_ctrlc = fork();
@@ -40,7 +46,7 @@ int main()
       std::vector<std::string> cmds = split(cmd, "|");
       int pipecmds = cmds.size();
       if (pipecmds != 0) {
-      std::ofstream history_file(".bash_history", std::ios::out | std::ios::app);
+      std::ofstream history_file(bash_history_path, std::ios::out | std::ios::app);
         if (history_file.is_open()) {
           if (pipecmds == 1) {
             std::vector<std::string> argv = split(cmds[0], " ");
@@ -213,7 +219,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
   if (argv[0] == "history") {
     int total_line = 0, current_line = 0;
     std::string read_line, out_line;
-    total_line = fileLineCount(".bash_history");
+    total_line = fileLineCount(bash_history_path);
     int len = total_line;
     if (argc > 2) {
       std::cout << "history argv error: too many arguments!\n";
@@ -226,7 +232,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(255);
       }
     }
-    std::ifstream history_file(".bash_history", std::ios::in);
+    std::ifstream history_file(bash_history_path, std::ios::in);
     if (history_file.is_open()) {
       while (std::getline(history_file, read_line)) {
         current_line++;
@@ -263,10 +269,10 @@ int builtinCommand(int argc, std::vector<std::string> argv)
   }
   if (argv[0][0] == '!') {
     if (argv[0] == "!!") {
-      int total_line = fileLineCount(".bash_history");
+      int total_line = fileLineCount(bash_history_path);
       int current_line = 0;
       std::string read_line;
-      std::ifstream history_file(".bash_history", std::ios::in);
+      std::ifstream history_file(bash_history_path, std::ios::in);
       if (history_file.is_open()) {
         while (std::getline(history_file, read_line)) {
           current_line++;
@@ -301,7 +307,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       return 1;
     }
     else {
-      int total_line = fileLineCount(".bash_history");
+      int total_line = fileLineCount(bash_history_path);
       argv[0] = argv[0].substr(1);
       if (std::stoi(argv[0]) > total_line) {
         std::cout << "event not found!\n";
@@ -309,7 +315,7 @@ int builtinCommand(int argc, std::vector<std::string> argv)
       }
       int current_line = 0;
       std::string read_line;
-      std::ifstream history_file(".bash_history", std::ios::in);
+      std::ifstream history_file(bash_history_path, std::ios::in);
       if (history_file.is_open()) {
         while (std::getline(history_file, read_line)) {
           current_line++;
@@ -419,7 +425,8 @@ void handler(int sig)
   }
 }
 
-int fileLineCount(std::string filename) {
+int fileLineCount(std::string filename)
+{
   int total_line = 0;
   std::string read_line;
     std::ifstream history_file(filename, std::ios::in);
