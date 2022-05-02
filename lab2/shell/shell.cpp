@@ -399,27 +399,32 @@ int externalCommand(int argc, std::vector<std::string> argv)
       argc = argc - 2;
     }
   }
-  if (argv[1] == "env") {
-    if (argv[0].find('=') != std::string::npos) {
-      pid_t pid = fork();
-      if (pid == 0) {
-        std::cout << argv[0] << std::endl;
+  if (argv[argc - 1] == "env" && argc >= 2) {
+    std::string env_out = "";
+    for (int i = argc - 2; i >= 0; i--) {
+      if (argv[i].find('=') != std::string::npos) {
+        if (i != 0)
+          std::cout << argv[i] << "\n";
+        if (i == 0) {
+          std::cout << argv[i];
+          fflush(stdout);
+        }
+        argv.erase(argv.begin() + i);
+        argc--;
+        if (i == 0) {
+          std::cout << env_out << std::endl;
+          char *arg_ptrs[argc + 1];
+          for (auto i = 0; i < argc; i++)
+            arg_ptrs[i] = &argv[i][0];
+          arg_ptrs[argc] = nullptr;
+          execvp(argv[0].c_str(), arg_ptrs);
+          exit(255);
+        }
       }
-      while(wait(nullptr) > 0);
-      argv.erase(argv.begin());
-      argc--;
-      if (pid > 0) {
-        char *arg_ptrs[argc + 1];
-        for (auto i = 0; i < argc; i++)
-          arg_ptrs[i] = &argv[i][0];
-        arg_ptrs[argc] = nullptr;
-        execvp(argv[0].c_str(), arg_ptrs);
+      else {
+        std::cout << "No such command!\n";
         exit(255);
       }
-    }
-    else {
-      std::cout << "No such command!\n";
-      exit(255);
     }
   }
   char *arg_ptrs[argc + 1];
