@@ -40,7 +40,7 @@ int main()
       std::vector<std::string> cmds = split(cmd, "|");
       int pipecmds = cmds.size();
       if (pipecmds != 0) {
-        std::ofstream history_file(".bash_history", std::ios::out | std::ios::app);
+      std::ofstream history_file(".bash_history", std::ios::out | std::ios::app);
         if (history_file.is_open()) {
           if (pipecmds == 1) {
             std::vector<std::string> argv = split(cmds[0], " ");
@@ -71,12 +71,7 @@ int main()
           externalCommand(argc, argv);
           exit(255);
         }
-        int ret = wait(nullptr);
-        if (ret < 0)
-        {
-          std::cout << "wait failed";
-          exit(255);
-        }
+        while (wait(nullptr) > 0);
       }
       else if (pipecmds == 2)
       {
@@ -163,8 +158,9 @@ int main()
     }
     else {
       waitpid(pid_ctrlc, &exit_status, 0);
-      if (exit_status == 0)
+      if (exit_status == 0) {
         exit(0);
+      }
     }
   }
   return 0;
@@ -264,7 +260,6 @@ int builtinCommand(int argc, std::vector<std::string> argv)
         exit(1);
       }
     }
-    return 1;
   }
   if (argv[0][0] == '!') {
     if (argv[0] == "!!") {
