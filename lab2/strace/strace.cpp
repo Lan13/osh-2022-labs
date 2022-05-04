@@ -41,24 +41,30 @@ int main() {
             for (auto i = 0; i < argc; i++)
                 arg_ptrs[i] = &argv[i][0];
             arg_ptrs[argc] = nullptr;
-            execvp(argv[1].c_str(), arg_ptrs);
+            execvp(argv[0].c_str(), arg_ptrs);
             exit(1);
         }
         else {
             waitpid(pid, 0, 0);
-            ptrace(PTRACE_SYSCALL, pid, 0, 0);
-            waitpid(pid, 0, 0);
-            struct user_regs_struct regs;
-            ptrace(PTRACE_GETREGS, pid, 0, &regs);
-            long syscall = regs.orig_rax;
-            fprintf(stderr, "%ld(%ld, %ld, %ld, %ld, %ld, %ld)\n", syscall, 
-            (long)regs.rdi, (long)regs.rsi, (long)regs.rdx, (long)regs.r10,
-            (long)regs.r8, (long)regs.r9);
-            ptrace(PTRACE_SYSCALL, pid, 0, 0);
-            waitpid(pid, 0, 0);
-//            ptrace(PTRACE_GETREGS, pid, 0, &regs);
-//            fprintf(stderr, " = %ld\n", (long)regs.rax);
-            continue;
+            ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_EXITKILL);
+            while (1) {
+                ptrace(PTRACE_SYSCALL, pid, 0, 0);
+                waitpid(pid, 0, 0);
+
+                struct user_regs_struct regs;
+                ptrace(PTRACE_GETREGS, pid, 0, &regs);
+
+                long syscall = regs.orig_rax;
+                fprintf(stderr, "%ld(%ld, %ld, %ld, %ld, %ld, %ld)\n", syscall, 
+                (long)regs.rdi, (long)regs.rsi, (long)regs.rdx, (long)regs.r10,
+                (long)regs.r8, (long)regs.r9);
+
+                ptrace(PTRACE_SYSCALL, pid, 0, 0);
+                waitpid(pid, 0, 0);
+
+                if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1)
+                    break;
+            }
         }
     }
     return 0;
