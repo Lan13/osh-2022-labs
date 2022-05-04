@@ -18,7 +18,8 @@ int main() {
     std::string cmd;
     while (true) {
         std::cout << "# ";
-        std::getline(std::cin, cmd);
+        if (!std::getline(std::cin, cmd))
+            break;
         cmd = trim(cmd);
         std::vector<std::string> cmds = split(cmd, "|");
         std::vector<std::string> argv = split(cmd, " ");
@@ -27,6 +28,8 @@ int main() {
             std::cout << "please enter strace command!\n";
             continue;
         }
+        argv.erase(argv.begin());
+        argc--;
         pid_t pid = fork();
         if (pid < 0) {
             std::cout << "fork error!\n";
@@ -53,9 +56,9 @@ int main() {
             (long)regs.r8, (long)regs.r9);
             ptrace(PTRACE_SYSCALL, pid, 0, 0);
             waitpid(pid, 0, 0);
-            ptrace(PTRACE_GETREGS, pid, 0, &regs);
-//            fprintf(stderr, " = %lid\n", (long)regs.rax);
-            break;
+//            ptrace(PTRACE_GETREGS, pid, 0, &regs);
+//            fprintf(stderr, " = %ld\n", (long)regs.rax);
+            continue;
         }
     }
     return 0;
