@@ -55,16 +55,36 @@ void *handle_chat(void *data) {
 
         // 将 prefix 和 suffix 加到每行消息并且发送
         for (int i = 0; i < message_cnt; i++) {
-            char* send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 36));
+            char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 36));
             if (!send_message) {
                 perror("send_message malloc");
             }
             strcpy(send_message, "Message:");   // 添加 prefix
             strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
             strcat(send_message, "\n");         // 添加 suffix
+            
+            // 当前需要发送消息的长度
+            int len = strlen(send_message);
+            // 如果消息不是太长，可以直接发送
+            if (len < MAX_MESSAGE_BUFFER_LEN) {
+                // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                send(pipe->fd_recv, send_message, strlen(send_message), 0);
+                free(send_message);
+                break;
+            }
 
+            // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
+            char *send_message_split = send_message;
+            while (len >= MAX_MESSAGE_BUFFER_LEN) {
+                // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                send(pipe->fd_recv, send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
+                // 将地址偏移
+                send_message_split = send_message_split + MAX_MESSAGE_BUFFER_LEN;
+                len = len - MAX_MESSAGE_BUFFER_LEN;
+            }
+            // 将剩余 len 长度的消息发送完成
             // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
-            send(pipe->fd_recv, send_message, strlen(send_message), 0);
+            send(pipe->fd_recv, send_message_split, len, 0);
             free(send_message);
         }
         free(buffer_split);
