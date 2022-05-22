@@ -6,6 +6,9 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
+#define MAX_MESSAGE_LEN 1048576
+#define MAX_MESSAGE_BUFFER_LEN 8192
+
 struct Pipe {
     int fd_send;
     int fd_recv;
@@ -13,12 +16,29 @@ struct Pipe {
 
 void *handle_chat(void *data) {
     struct Pipe *pipe = (struct Pipe *)data;
-    char buffer[1024] = "";
-    
-    ssize_t len;
-    // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
-    // len 返回实际复制数据的字节数
-    while ((len = recv(pipe->fd_send, buffer, 1000, 0)) > 0) { 
+    // buffer 用来接受所有消息，最大不超过 1 MiB
+    char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_LEN);
+
+    while (1) { 
+        ssize_t len;
+        // 用于接受每段消息
+        char *recv_buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
+        
+        // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
+        // len 返回实际数据的字节数
+        len = recv(pipe->fd_send, recv_buffer, MAX_MESSAGE_BUFFER_LEN, 0);
+        if (len <= 0) {
+            break;
+        }
+        strcat(buffer, recv_buffer);    // 先赋予初始消息指
+
+        // 如果实际消息太长，超过了 8192 字节，就再次接收新的消息，直到不再超出
+        while (len >= MAX_MESSAGE_BUFFER_LEN) {
+            // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
+            // len 返回实际数据的字节数
+            len = recv(pipe->fd_send, recv_buffer, MAX_MESSAGE_BUFFER_LEN, 0);
+            strcat(buffer, recv_buffer);    // 更新我们的消息 buffer
+        }
 
         // 将 buffer 得到的消息用 \n 进行分割
         char **buffer_split = (char **)malloc(sizeof(char*) * 1024);
