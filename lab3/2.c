@@ -10,6 +10,7 @@
 #define MAX_MESSAGE_BUFFER_LEN 4096
 #define MAX_USER_LOAD 32
 
+int online[MAX_USER_LOAD];      // 记录用户在线状态
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct Pipe {
@@ -91,9 +92,11 @@ void *handle_chat(void *data) {
             if (len < MAX_MESSAGE_BUFFER_LEN) {
                 // 接下来向其他 31 个用户发送消息
                 for (int j = 0; j < MAX_USER_LOAD; j++) {
-                    if (pipe->fd_recv[j] != pipe->fd_send) {
+                    if (pipe->fd_recv[j] != pipe->fd_send && online[j] == 1) {  // 只能发送给在线的用户，否则会发送多次
                         // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
                         send(pipe->fd_recv[j], send_message, strlen(send_message), 0);
+                        // debug 测试发送给哪些用户
+                        // printf("user%d send messages to %d\n", pipe->fd_send, pipe->fd_recv[j]);
                     }
                 }
                 free(send_message);
@@ -105,7 +108,7 @@ void *handle_chat(void *data) {
             while (len >= MAX_MESSAGE_BUFFER_LEN) {
                 // 接下来向其他 31 个用户发送分段消息
                 for (int j = 0; j < MAX_USER_LOAD; j++) {
-                    if (pipe->fd_recv[j] != pipe->fd_send) {
+                    if (pipe->fd_recv[j] != pipe->fd_send && online[j] == 1) {  // 只能发送给在线的用户，否则会发送多次
                         // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
                         send(pipe->fd_recv[j], send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
                     }
@@ -117,7 +120,7 @@ void *handle_chat(void *data) {
 
             // 接下来向其他 31 个用户发送剩余消息
             for (int j = 0; j < MAX_USER_LOAD; j++) {
-                if (pipe->fd_recv[j] != pipe->fd_send) {
+                if (pipe->fd_recv[j] != pipe->fd_send && online[j] == 1) {  // 只能发送给在线的用户，否则会发送多次
                     // 将剩余 len 长度的消息发送完成
                     // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
                     send(pipe->fd_recv[j], send_message_split, len, 0);
@@ -132,11 +135,15 @@ void *handle_chat(void *data) {
     }
 
     free(buffer);
+
+    pthread_mutex_lock(&mutex);
     *pipe->online = 0;  // 线程结束后，将用户在线状态退出，释放出一个新的位置
     // debug
     // 在服务器中查看 user 登录登出信息，用于 debug
     printf("user%d left the chatting room!\n", pipe->fd_send);
     close(pipe->fd_send);   // 线程结束后，将写端关闭
+    pthread_mutex_unlock(&mutex);
+
     pthread_exit(NULL);
     return NULL;
 }
@@ -163,7 +170,6 @@ int main(int argc, char **argv) {
     }
 
     int user_fd[MAX_USER_LOAD];
-    int online[MAX_USER_LOAD];      // 记录用户在线状态
     memset(online, 0, sizeof(int) * MAX_USER_LOAD);
     pthread_t thread[MAX_USER_LOAD];
     struct Pipe pipe[MAX_USER_LOAD];
@@ -177,6 +183,8 @@ int main(int argc, char **argv) {
             perror("user_fd accept");
             return 1;
         }
+
+        pthread_mutex_lock(&mutex);
         pipe[i].fd_send = user_fd[i];
         // debug
         // printf("current pipe[%d].fd_send = %d\n", i, pipe[i].fd_send);
@@ -199,6 +207,8 @@ int main(int argc, char **argv) {
                 pipe[j].fd_recv[i] = user_fd[i];
             }
         }
+        pthread_mutex_unlock(&mutex);
+
         pthread_create(&thread[i], NULL, handle_chat, (void *)&pipe[i]);
     }
     return 0;
