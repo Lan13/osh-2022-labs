@@ -9,13 +9,23 @@
 #define MAX_MESSAGE_LEN 1048576
 #define MAX_MESSAGE_BUFFER_LEN 4096
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 struct Pipe {
     int fd_send;
-    int fd_recv;
+    int fd_recv[32];
+    int online;
 };
 
 void *handle_chat(void *data) {
+
+    pthread_detach(pthread_self());
+
     struct Pipe *pipe = (struct Pipe *)data;
+
+    char login[] = "Welcome to chatting room!\n";
+    write(pipe->fd_send, login, sizeof(login));
+
     // buffer 用来接受所有消息，最大不超过 1 MiB
     char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_LEN);
 
@@ -53,13 +63,15 @@ void *handle_chat(void *data) {
             buffer_split[message_cnt] = strtok(NULL, "\n");
         }
 
+        // 
+        pthread_mutex_lock(&mutex);
         // 将 prefix 和 suffix 加到每行消息并且发送
         for (int i = 0; i < message_cnt; i++) {
-            char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 36));
+            char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 100));
             if (!send_message) {
                 perror("send_message malloc");
             }
-            strcpy(send_message, "Message:");   // 添加 prefix
+            sprintf(send_message, "Message from %d:", pipe->fd_send);   // 添加 prefix
             strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
             strcat(send_message, "\n");         // 添加 suffix
             
@@ -67,8 +79,13 @@ void *handle_chat(void *data) {
             int len = strlen(send_message);
             // 如果消息不是太长，可以直接发送
             if (len < MAX_MESSAGE_BUFFER_LEN) {
-                // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
-                send(pipe->fd_recv, send_message, strlen(send_message), 0);
+                // 接下来向其他 31 个用户发送消息
+                for (int j = 0; j < 32; j++) {
+                    if (pipe->fd_recv[j] != pipe->fd_send) {
+                        // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                        send(pipe->fd_recv[j], send_message, strlen(send_message), 0);
+                    }
+                }
                 free(send_message);
                 break;
             }
@@ -76,21 +93,38 @@ void *handle_chat(void *data) {
             // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
             char *send_message_split = send_message;
             while (len >= MAX_MESSAGE_BUFFER_LEN) {
-                // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
-                send(pipe->fd_recv, send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
+                // 接下来向其他 31 个用户发送分段消息
+                for (int j = 0; j < 32; j++) {
+                    if (pipe->fd_recv[j] != pipe->fd_send) {
+                        // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                        send(pipe->fd_recv[j], send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
+                    }
+                }
                 // 将地址偏移
                 send_message_split = send_message_split + MAX_MESSAGE_BUFFER_LEN;
                 len = len - MAX_MESSAGE_BUFFER_LEN;
             }
-            // 将剩余 len 长度的消息发送完成
-            // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
-            send(pipe->fd_recv, send_message_split, len, 0);
+
+            // 接下来向其他 31 个用户发送剩余消息
+            for (int j = 0; j < 32; j++) {
+                if (pipe->fd_recv[j] != pipe->fd_send) {
+                    // 将剩余 len 长度的消息发送完成
+                    // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                    send(pipe->fd_recv[j], send_message_split, len, 0);
+                }
+            }
             free(send_message);
         }
+
+        // 
+        pthread_mutex_unlock(&mutex);
         free(buffer_split);
     }
 
     free(buffer);
+    pipe->online = 0;
+    close(pipe->fd_send);
+    pthread_exit(NULL);
     return NULL;
 }
 
@@ -114,22 +148,29 @@ int main(int argc, char **argv) {
         perror("listen");
         return 1;
     }
-    int fd1 = accept(fd, NULL, NULL);
-    int fd2 = accept(fd, NULL, NULL);
-    if (fd1 == -1 || fd2 == -1) {
-        perror("accept");
-        return 1;
+
+    int user_fd[32];
+    int online[32] = {0};
+    pthread_t thread[32];
+    struct Pipe pipe[32];
+
+    int i = 0;
+    while(1) {
+        while (online[i] == 1)
+            i = (i + 1) % 32;
+        user_fd[i] = accept(fd, NULL, NULL);
+        if (user_fd[i] == -1) {
+            perror("user_fd accept");
+            return 1;
+        }
+        pipe[i].fd_send = user_fd[i];
+        pipe[i].online = 1;
+        for (int j = 0; j < 32; j++) {
+            if (pipe[j].online == 1) {
+                pipe[j].fd_recv[i] = user_fd[i];
+            }
+        }
+        pthread_create(&thread[i], NULL, handle_chat, (void *)&pipe);
     }
-    pthread_t thread1, thread2;
-    struct Pipe pipe1;
-    struct Pipe pipe2;
-    pipe1.fd_send = fd1;
-    pipe1.fd_recv = fd2;
-    pipe2.fd_send = fd2;
-    pipe2.fd_recv = fd1;
-    pthread_create(&thread1, NULL, handle_chat, (void *)&pipe1);
-    pthread_create(&thread2, NULL, handle_chat, (void *)&pipe2);
-    pthread_join(thread1, NULL);
-    pthread_join(thread2, NULL);
     return 0;
 }
