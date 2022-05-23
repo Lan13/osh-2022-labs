@@ -14,7 +14,6 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 struct Pipe {
     int fd_send;
     int fd_recv[32];
-    int online;
 };
 
 void *handle_chat(void *data) {
@@ -25,6 +24,7 @@ void *handle_chat(void *data) {
 
     char login[] = "Welcome to chatting room!\n";
     write(pipe->fd_send, login, sizeof(login));
+    printf("user%d entered the chatting room!\n", pipe->fd_send);
 
     // buffer 用来接受所有消息，最大不超过 1 MiB
     char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_LEN);
@@ -48,6 +48,7 @@ void *handle_chat(void *data) {
             len = recv(pipe->fd_send, recv_buffer, MAX_MESSAGE_BUFFER_LEN, 0);
             strcat(buffer, recv_buffer);    // 更新我们的消息 buffer
         }
+        printf("user%d send a message: %s", pipe->fd_send, buffer);
 
         // 将 buffer 得到的消息用 \n 进行分割
         char **buffer_split = (char **)malloc(sizeof(char*) * 1024);
@@ -67,7 +68,7 @@ void *handle_chat(void *data) {
         pthread_mutex_lock(&mutex);
         // 将 prefix 和 suffix 加到每行消息并且发送
         for (int i = 0; i < message_cnt; i++) {
-            char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 100));
+            char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 64));
             if (!send_message) {
                 perror("send_message malloc");
             }
@@ -122,7 +123,8 @@ void *handle_chat(void *data) {
     }
 
     free(buffer);
-    pipe->online = 0;
+
+    printf("user%d left the chatting room!\n", pipe->fd_send);
     close(pipe->fd_send);
     pthread_exit(NULL);
     return NULL;
@@ -150,7 +152,8 @@ int main(int argc, char **argv) {
     }
 
     int user_fd[32];
-    int online[32] = {0};
+    int online[32];
+    memset(online, 0, sizeof(int) * 32);
     pthread_t thread[32];
     struct Pipe pipe[32];
 
@@ -164,13 +167,21 @@ int main(int argc, char **argv) {
             return 1;
         }
         pipe[i].fd_send = user_fd[i];
-        pipe[i].online = 1;
+        // debug
+        // printf("current pipe[%d].fd_send = %d\n", i, pipe[i].fd_send);
+        online[i] = 1;
+        // debug
+        // printf("current online[%d] = %d\n", i, online[i]);
+
         for (int j = 0; j < 32; j++) {
-            if (pipe[j].online == 1) {
+            pipe[i].fd_recv[j] = user_fd[j];
+        }
+        for (int j = 0; j < 32; j++) {
+            if (online[j] == 1) {
                 pipe[j].fd_recv[i] = user_fd[i];
             }
         }
-        pthread_create(&thread[i], NULL, handle_chat, (void *)&pipe);
+        pthread_create(&thread[i], NULL, handle_chat, (void *)&pipe[i]);
     }
     return 0;
 }
