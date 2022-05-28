@@ -21,23 +21,15 @@ void *handle_chat(void *data) {
 
     while (1) { 
         ssize_t len;
-        // 用于接受每段消息
-        char *recv_buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
         
         // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
         // len 返回实际数据的字节数
+        memset(buffer, 0, sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
         len = recv(pipe->fd_send, buffer, MAX_MESSAGE_BUFFER_LEN, 0);
         if (len <= 0) {
             break;
         }
-
-        // 如果实际消息太长，超过了 4096 字节，就再次接收新的消息，直到不再超出
-        while (len >= MAX_MESSAGE_BUFFER_LEN) {
-            // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
-            // len 返回实际数据的字节数
-            len = recv(pipe->fd_send, recv_buffer, MAX_MESSAGE_BUFFER_LEN, 0);
-            strcat(buffer, recv_buffer);    // 更新我们的消息 buffer
-        }
+        // printf("len: %ld\n", len);
 
         // 将 buffer 得到的消息用 \n 进行分割
         char **buffer_split = (char **)malloc(sizeof(char*) * 1024);
@@ -55,7 +47,9 @@ void *handle_chat(void *data) {
         }
 
         // printf("message_cnt: %d\n", message_cnt);
-
+        if (message_cnt == 0) {
+            send(pipe->fd_recv, "Message:\n", 9, 0);
+        }
         // 将 prefix 和 suffix 加到每行消息并且发送
         for (int i = 0; i < message_cnt; i++) {
             char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 36));
@@ -64,19 +58,61 @@ void *handle_chat(void *data) {
             }
             strcpy(send_message, "Message:");   // 添加 prefix
             strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
-            strcat(send_message, "\n");         // 添加 suffix
 
             // debug
             // printf("loop i:%d send a message: %s", i, send_message);
             // printf("loop i:%d message_cnt: %d\n", i, message_cnt);
             
-            int len;
-            while((len = send(pipe->fd_recv, send_message, strlen(send_message), 0)) < strlen(send_message)) {
-                send_message = send_message + len;
+            ssize_t send_len;
+            printf("send_message: %s", send_message);
+            while ((send_len = send(pipe->fd_recv, send_message, strlen(buffer_split[i]) + 8, 0)) < strlen(buffer_split[i]) + 8) {
+                send_message = send_message + send_len;
+                printf("len: %ld, strlen(send_message): %ld", len, strlen(send_message));
+            }
+            if (len < MAX_MESSAGE_BUFFER_LEN) {
+                send(pipe->fd_recv, "\n", 1, 0);
             }
             free(send_message);
         }
         free(buffer_split);
+        while (len >= MAX_MESSAGE_BUFFER_LEN) {
+            memset(buffer, 0, sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
+            len = recv(pipe->fd_send, buffer, MAX_MESSAGE_BUFFER_LEN, 0);
+            printf("len: %ld, buffer: %s", len, buffer);
+            char **buffer_split = (char **)malloc(sizeof(char*) * 1024);
+            int message_cnt = 0;    // 记录有多少行消息
+
+            
+            buffer_split[message_cnt] = strtok(buffer, "\n");
+            printf("buffer_split[%d]: %s\n", message_cnt, buffer_split[message_cnt]);
+            while (buffer_split[message_cnt]) {
+                message_cnt++;
+                buffer_split[message_cnt] = strtok(NULL, "\n");
+                // printf("buffer_split[message_cnt]: %s\n", buffer_split[message_cnt]);
+            }
+            if (message_cnt == 0) {
+                send(pipe->fd_recv, "Message:\n", 9, 0);
+            }
+            printf("after split message_cnt: %d\n", message_cnt);
+            for (int i = 0; i < message_cnt; i++) {
+                char *send_message = (char*)malloc(sizeof(char) * strlen(buffer_split[i]));
+                strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
+                
+
+                ssize_t send_len;
+                // printf("send_message: %s", send_message);
+                while ((send_len = send(pipe->fd_recv, send_message, strlen(send_message), 0)) < strlen(send_message)) {
+                    send_message = send_message + send_len;
+                    printf("len: %ld, strlen(send_message): %ld", len, strlen(send_message));
+                }
+                if (i != message_cnt - 1) {
+                    send(pipe->fd_recv, "\nMessage:", 9, 0);
+                }
+                else {
+                    send(pipe->fd_recv, "\n", 1, 0);
+                }
+            }
+        }
     }
 
     free(buffer);
