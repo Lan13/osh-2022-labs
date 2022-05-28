@@ -51,7 +51,10 @@ void *handle_chat(void *data) {
         while (buffer_split[message_cnt]) {
             message_cnt++;
             buffer_split[message_cnt] = strtok(NULL, "\n");
+            // printf("buffer_split[message_cnt]: %s\n", buffer_split[message_cnt]);
         }
+
+        // printf("message_cnt: %d\n", message_cnt);
 
         // 将 prefix 和 suffix 加到每行消息并且发送
         for (int i = 0; i < message_cnt; i++) {
@@ -62,6 +65,10 @@ void *handle_chat(void *data) {
             strcpy(send_message, "Message:");   // 添加 prefix
             strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
             strcat(send_message, "\n");         // 添加 suffix
+
+            // debug
+            // printf("loop i:%d send a message: %s", i, send_message);
+            // printf("loop i:%d message_cnt: %d\n", i, message_cnt);
             
             // 当前需要发送消息的长度
             int len = strlen(send_message);
@@ -70,7 +77,7 @@ void *handle_chat(void *data) {
                 // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
                 send(pipe->fd_recv, send_message, strlen(send_message), 0);
                 free(send_message);
-                break;
+                continue;
             }
 
             // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
