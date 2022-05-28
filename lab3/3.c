@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
                                 }
                             }
                             free(send_message);
-                            break;
+                            continue;
                         }
                         // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
                         char *send_message_split = send_message;
