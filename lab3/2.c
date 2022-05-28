@@ -166,7 +166,7 @@ void *handle_send(void *data) {
                         }
                     }
                     free(send_message);
-                    break;
+                    continue;
                 }
 
                 // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
