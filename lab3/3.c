@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
         perror("socket");
         return 1;
     }
+    // 将服务端套接字设置成非阻塞
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
@@ -35,20 +36,22 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    fd_set users;   //可读clients
-    fd_set allusers;
-    FD_ZERO(&users);
+    fd_set allusers;    // all socket that can be scanned
+    fd_set users;       // socket after select
     FD_ZERO(&allusers);
+    FD_ZERO(&users);
     struct timeval timeout;
     int maxfd = 0;
 
     // buffer 用来接受所有消息，最大不超过 1 MiB
     char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_LEN);
     while(1) {
-        users = allusers;
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
-        int newfd = accept(fd, NULL, NULL);
+        users = allusers;       // current users
+        timeout.tv_sec = 0;     // setting time
+        timeout.tv_usec = 5000;
+        int newfd = accept(fd, NULL, NULL);     // 新用户加入
+        // 在非阻塞操作当中，如果连续做读取操作但是却没有数据可读时
+        // 会返回一个 EAGAIN 错误信号，在这里我们需要处理一下
         if (newfd == -1 && errno != EAGAIN) {
             perror("newfd accept");
             return 1;
@@ -56,9 +59,10 @@ int main(int argc, char **argv) {
         if (newfd > 0) {
             FD_SET(newfd, &users);
             FD_SET(newfd, &allusers);
-            if (maxfd < newfd) {
+            if (maxfd < newfd) {        // 更新最大的 fd 值
                 maxfd = newfd;
             }
+            // debug
             char login[] = "Welcome to chatting room!\n";
             write(newfd, login, sizeof(login));
             printf("user%d entered the chatting room!\n", newfd);
@@ -79,7 +83,7 @@ int main(int argc, char **argv) {
                     len = recv(fdi, buffer, MAX_MESSAGE_BUFFER_LEN, 0);
                     if (len <= 0) {
                         printf("user%d left the chatting room!\n", fdi);
-                        FD_CLR(fdi, &allusers);
+                        FD_CLR(fdi, &allusers);     // 离开时清除用户的 fd
                         close(fdi);
                         break;
                     }
@@ -94,7 +98,7 @@ int main(int argc, char **argv) {
 
                     cnt++;
                     // debug
-                    printf("user%d send a message: %s", fdi, buffer);
+                    // printf("user%d send a message: %s", fdi, buffer);
 
                     char **buffer_split = (char **)malloc(sizeof(char*) * 1024);
                     if (!buffer_split) {
@@ -126,20 +130,42 @@ int main(int argc, char **argv) {
                             // 接下来向其他 31 个用户发送消息
                             for (int fdj = 0; fdj <= maxfd; fdj++) {
                                 if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
-                                    // send 函数用来发送数据，将 send_message 数据发送到 fd_recv
+                                    // send 函数用来发送数据，将 send_message 数据发送到 fdj
                                     send(fdj, send_message, strlen(send_message), 0);
                                     // debug 测试发送给哪些用户
-                                    // printf("user%d send messages to %d\n", pipe->fd_send, pipe->fd_recv[j]);
+                                    // printf("user%d send messages to %d\n", fdi, fdj);
                                 }
                             }
                             free(send_message);
                             break;
                         }
+                        // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
+                        char *send_message_split = send_message;
+                        while (len >= MAX_MESSAGE_BUFFER_LEN) {
+                            // 接下来向其他 31 个用户发送分段消息
+                            for (int fdj = 0; fdj <= maxfd; fdj++) {
+                                if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
+                                    // send 函数用来发送数据，将 send_message 数据发送到 fdj
+                                    send(fdj, send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
+                                }
+                            }
+                            // 将地址偏移
+                            send_message_split = send_message_split + MAX_MESSAGE_BUFFER_LEN;
+                            len = len - MAX_MESSAGE_BUFFER_LEN;
+                        }
+
+                        // 接下来向其他 31 个用户发送剩余消息
+                        for (int fdj = 0; fdj <= maxfd; fdj++) {
+                            if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
+                                // 将剩余 len 长度的消息发送完成
+                                // send 函数用来发送数据，将 send_message 数据发送到 fdj
+                                send(fdj, send_message_split, len, 0);
+                            }
+                        }
                         free(send_message);
                     }
                     free(buffer_split);
                 }
-
             }
         }
     }
