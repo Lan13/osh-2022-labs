@@ -145,7 +145,6 @@ void *handle_send(void *data) {
             for (int i = 0; i < message_cnt; i++) {
                 int base_offset = 8;
 
-                // 添加 prefix 并且添加发送者信息
                 strcpy(send_message, "Message:");   // 添加 prefix
                 strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
                 // 把原有的"\n"加回去，这里特殊判断比较多的原因是因为strtok()分割的性质

@@ -9,7 +9,6 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-#define MAX_MESSAGE_LEN 1048576
 #define MAX_MESSAGE_BUFFER_LEN 4096
 
 
@@ -43,8 +42,7 @@ int main(int argc, char **argv) {
     struct timeval timeout;
     int maxfd = 0;
 
-    // buffer 用来接受所有消息，最大不超过 1 MiB
-    char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_LEN);
+    char *buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
     while(1) {
         users = allusers;       // current users
         timeout.tv_sec = 0;     // setting time
@@ -74,26 +72,14 @@ int main(int argc, char **argv) {
             int cnt = 0;
             for (int fdi = 0; fdi <= maxfd && cnt < readcnt; fdi++) {
                 if (FD_ISSET(fdi, &users)) {
-                    ssize_t len;
-                    // 用于接受每段消息
-                    char *recv_buffer = (char*)malloc(sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
-                    
-                    // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
-                    // len 返回实际数据的字节数
-                    len = recv(fdi, buffer, MAX_MESSAGE_BUFFER_LEN, 0);
+                    // recv之前需要 memset buffer
+                    memset(buffer, 0, sizeof(char) * MAX_MESSAGE_BUFFER_LEN);
+                    ssize_t len = recv(fdi, buffer, MAX_MESSAGE_BUFFER_LEN, 0);
                     if (len <= 0) {
                         printf("user%d left the chatting room!\n", fdi);
                         FD_CLR(fdi, &allusers);     // 离开时清除用户的 fd
                         close(fdi);
                         break;
-                    }
-
-                    // 如果实际消息太长，超过了 4096 字节，就再次接收新的消息，直到不再超出
-                    while (len >= MAX_MESSAGE_BUFFER_LEN) {
-                        // recv 函数用来复制数据，将 fd_send 的内容复制到 buffer 当中
-                        // len 返回实际数据的字节数
-                        len = recv(fdi, recv_buffer, MAX_MESSAGE_BUFFER_LEN, 0);
-                        strcat(buffer, recv_buffer);    // 更新我们的消息 buffer
                     }
 
                     cnt++;
@@ -112,58 +98,44 @@ int main(int argc, char **argv) {
                         buffer_split[message_cnt] = strtok(NULL, "\n");
                     }
 
-                    // 将 prefix 和 suffix 加到每行消息并且发送
-                    for (int i = 0; i < message_cnt; i++) {
-                        char *send_message = (char*)malloc(sizeof(char) * (strlen(buffer_split[i]) + 80));
-                        if (!send_message) {
-                            perror("send_message malloc");
-                        }
-                        // 添加 prefix 并且添加发送者信息
-                        sprintf(send_message, "Message from uesr%d:", fdi);
-                        strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
-                        strcat(send_message, "\n");         // 添加 suffix
-                    
-                        // 当前需要发送消息的长度
-                        int len = strlen(send_message);
-                        // 如果消息不是太长，可以直接发送
-                        if (len < MAX_MESSAGE_BUFFER_LEN) {
-                            // 接下来向其他 31 个用户发送消息
-                            for (int fdj = 0; fdj <= maxfd; fdj++) {
-                                if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
-                                    // send 函数用来发送数据，将 send_message 数据发送到 fdj
-                                    send(fdj, send_message, strlen(send_message), 0);
-                                    // debug 测试发送给哪些用户
-                                    // printf("user%d send messages to %d\n", fdi, fdj);
-                                }
-                            }
-                            free(send_message);
-                            continue;
-                        }
-                        // 如果消息太长的话，不能一次性发送完成，则分割成多段进行发送
-                        char *send_message_split = send_message;
-                        while (len >= MAX_MESSAGE_BUFFER_LEN) {
-                            // 接下来向其他 31 个用户发送分段消息
-                            for (int fdj = 0; fdj <= maxfd; fdj++) {
-                                if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
-                                    // send 函数用来发送数据，将 send_message 数据发送到 fdj
-                                    send(fdj, send_message_split, MAX_MESSAGE_BUFFER_LEN, 0);
-                                }
-                            }
-                            // 将地址偏移
-                            send_message_split = send_message_split + MAX_MESSAGE_BUFFER_LEN;
-                            len = len - MAX_MESSAGE_BUFFER_LEN;
-                        }
-
-                        // 接下来向其他 31 个用户发送剩余消息
+                    // 直接对换行符进行处理，因为如果只有一个\n时，strtok只会返回一个null
+                    if (message_cnt == 0) {
                         for (int fdj = 0; fdj <= maxfd; fdj++) {
                             if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
-                                // 将剩余 len 长度的消息发送完成
                                 // send 函数用来发送数据，将 send_message 数据发送到 fdj
-                                send(fdj, send_message_split, len, 0);
+                                send(fdj, "Message:\n", 9, 0);
                             }
                         }
-                        free(send_message);
                     }
+
+                    char *send_message = (char*)malloc(sizeof(char) * MAX_MESSAGE_BUFFER_LEN + 9);
+                    if (!send_message) {
+                        perror("send_message malloc");
+                    }
+                    // 将 prefix 和 suffix 加到每行消息并且发送
+                    for (int i = 0; i < message_cnt; i++) {
+                        int base_offset = 8;
+                        strcpy(send_message, "Message:");   // 添加 prefix
+                        strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
+                         // 把原有的"\n"加回去，这里特殊判断比较多的原因是因为strtok()分割的性质
+                        if (strlen(buffer_split[i]) < MAX_MESSAGE_BUFFER_LEN && (len != MAX_MESSAGE_BUFFER_LEN || i != message_cnt - 1)) {
+                            strcat(send_message, "\n");
+                            base_offset = 9;
+                        }
+                    
+                        for (int fdj = 0; fdj <= maxfd; fdj++) {
+                            if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
+                                ssize_t send_len;
+                                // send 函数用来发送数据，将 send_message 数据发送到 fdj
+                                // 处理一次send发送不完的情况：如果一次send发送不完的话，则继续发送
+                                while ((send_len = send(fdj, send_message, strlen(buffer_split[i]) + base_offset, 0)) < strlen(buffer_split[i]) + base_offset) {
+                                    printf("send twice!\n");
+                                    send_message = send_message + send_len;
+                                }
+                            }
+                        }
+                    }
+                    free(send_message);
                     free(buffer_split);
                 }
             }
