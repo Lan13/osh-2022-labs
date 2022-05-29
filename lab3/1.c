@@ -44,12 +44,12 @@ void *handle_chat(void *data) {
 
         // 将 prefix 和 suffix 加到每行消息并且发送
         char *send_message = (char*)malloc(sizeof(char) * (MAX_MESSAGE_BUFFER_LEN + 9));
+        if (!send_message) {
+            perror("send_message malloc");
+        }
         for (int i = 0; i < message_cnt; i++) {
             int base_offset = 8;
 
-            if (!send_message) {
-                perror("send_message malloc");
-            }
             strcpy(send_message, "Message:");   // 添加 prefix
             strcat(send_message, buffer_split[i]);  // 添加发送的消息内容
             // 把原有的"\n"加回去，这里特殊判断比较多的原因是因为strtok()分割的性质
