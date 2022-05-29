@@ -58,6 +58,7 @@ void *handle_chat(void *data) {
                 base_offset = 9;
             }
             ssize_t send_len;
+            // 处理一次send发送不完的情况：如果一次send发送不完的话，则继续发送
             while ((send_len = send(pipe->fd_recv, send_message, strlen(buffer_split[i]) + base_offset, 0)) < strlen(buffer_split[i]) + base_offset) {
                 printf("send twice!\n");
                 send_message = send_message + send_len;
