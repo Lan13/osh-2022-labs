@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-#define MAX_MESSAGE_BUFFER_LEN 2048
+#define MAX_MESSAGE_BUFFER_LEN 4096
 
 struct Pipe {
     int fd_send;
@@ -58,10 +58,12 @@ void *handle_chat(void *data) {
                 base_offset = 9;
             }
             ssize_t send_len;
+            size_t send_size = strlen(buffer_split[i]) + base_offset;
             // 处理一次send发送不完的情况：如果一次send发送不完的话，则继续发送
-            while ((send_len = send(pipe->fd_recv, send_message, strlen(buffer_split[i]) + base_offset, 0)) < strlen(buffer_split[i]) + base_offset) {
+            while ((send_len = send(pipe->fd_recv, send_message, send_size, 0)) < send_size) {
                 printf("send twice!\n");
                 send_message = send_message + send_len;
+                send_size = send_size - send_len;
             }
         }
         free(send_message);

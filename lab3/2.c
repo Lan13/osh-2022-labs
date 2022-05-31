@@ -155,10 +155,12 @@ void *handle_send(void *data) {
                 for (int j = 0; j < MAX_USER_LOAD; j++) {
                     if (pipe->fd_recv[j] != pipe->fd_send && online[j] == 1) {  // 只能发送给在线的用户，否则会发送多次
                         ssize_t send_len;
+                        size_t send_size = strlen(buffer_split[i]) + base_offset;
                         // 处理一次send发送不完的情况：如果一次send发送不完的话，则继续发送
-                        while ((send_len = send(pipe->fd_recv[j], send_message, strlen(buffer_split[i]) + base_offset, 0)) < strlen(buffer_split[i]) + base_offset) {
+                        while ((send_len = send(pipe->fd_recv[j], send_message, send_size, 0)) < send_size) {
                             printf("send twice!\n");
                             send_message = send_message + send_len;
+                            send_size = send_size - send_len;
                         }
                     }
                 }

@@ -126,11 +126,13 @@ int main(int argc, char **argv) {
                         for (int fdj = 0; fdj <= maxfd; fdj++) {
                             if (fdj != fdi && FD_ISSET(fdj, &allusers)) {  // 只能发送给在线的用户，否则会发送多次
                                 ssize_t send_len;
+                                size_t send_size = strlen(buffer_split[i]) + base_offset;
                                 // send 函数用来发送数据，将 send_message 数据发送到 fdj
                                 // 处理一次send发送不完的情况：如果一次send发送不完的话，则继续发送
-                                while ((send_len = send(fdj, send_message, strlen(buffer_split[i]) + base_offset, 0)) < strlen(buffer_split[i]) + base_offset) {
+                                while ((send_len = send(fdj, send_message, send_size, 0)) < send_size) {
                                     printf("send twice!\n");
                                     send_message = send_message + send_len;
+                                    send_size = send_size - send_len;
                                 }
                             }
                         }
