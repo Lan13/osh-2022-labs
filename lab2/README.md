@@ -1,5 +1,7 @@
 # osh-lab2 实验报告
 
+姓名 蓝俊玮 学号 PB20111689
+
 本次实验我只选做了 shell 部分的选做题：
 
 - 支持 History 历史命令持久化，新打开的 shell 能够使用之前保存的记录。将 .bash_history 文件存储在 shell 目录下，在程序中先获取当前的 cwd 然后加上 ".bash_history" 就可以得到 .bash_history 的文件路径，并且能够在接下来的操作中继续使用，避免了使用 cd 指令之后导致无法获取 .bash_history 的文件路径。
